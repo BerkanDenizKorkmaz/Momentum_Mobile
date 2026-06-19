@@ -69,8 +69,8 @@ export default function RoutinesScreen({ navigation }) {
     ? Math.max(...routines.map(r => r.currentStreak || 0)) 
     : 0;
 
-  // Sum of all best streaks across routines
-  const dynamicTotalFlames = routines.reduce((total, r) => total + (r.bestStreak || 0), 0);
+  // Sum of all current streaks across routines (Total flames)
+  const dynamicTotalFlames = routines.reduce((total, r) => total + (r.currentStreak || 0), 0);
 
   return (
     <Screen edges={['top']}>

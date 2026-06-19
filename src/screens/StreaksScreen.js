@@ -46,9 +46,9 @@ export default function StreaksScreen({ navigation }) {
     ? Math.max(...routines.map(r => r.bestStreak || 0)) 
     : 0;
 
-  // 3. Toplam Alev: Tüm rutinlerdeki serilerin veya tamamlamaların toplamı. 
-  // (Burada tüm rutinlerdeki bestStreak'lerin toplamını baz alıyoruz, istersen currentStreak toplamı da yapabilirsin)
-  const dynamicTotalFlames = routines.reduce((total, r) => total + (r.bestStreak || 0), 0);
+  // 3. Toplam Alev: Tüm rutinlerdeki mevcut serilerin toplamı. 
+  // (Güncel seri durumlarının toplamı baz alınmıştır)
+  const dynamicTotalFlames = routines.reduce((total, r) => total + (r.currentStreak || 0), 0);
 
   return (
     <Screen edges={['top']}>
