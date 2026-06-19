@@ -19,7 +19,7 @@ const translations = {
     focusStatsTitle: 'FOCUS STATS',
     seeInFocus: 'See in focus tab',
     daysStr: 'days',
-    lockedAnalytics: 'Monthly and yearly analytics unlock in Pro & Premium.' // Added translation
+    lockedAnalytics: 'Monthly and yearly analytics unlock in Pro & Premium.'
   },
   Türkçe: {
     analytics: 'Analizler',
@@ -34,28 +34,29 @@ const translations = {
     focusStatsTitle: 'ODAK İSTATİSTİKLERİ',
     seeInFocus: 'Odak sekmesinde gör',
     daysStr: 'gün',
-    lockedAnalytics: 'Aylık ve yıllık analizler Pro ve Premium planda açılır.' // Added translation
+    lockedAnalytics: 'Aylık ve yıllık analizler Pro ve Premium planda açılır.'
   }
 };
 
+// Removed hardcoded 'streak' and 'flames' as they are now calculated dynamically
 const DATA = {
   Week: {
     completion: [80, 55, 90, 70, 85, 40, 100],
     usage: [25, 40, 30, 50, 35, 45, 55],
     labels: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
-    streak: 7, rate: 82, flames: 142,
+    rate: 82,
   },
   Month: {
     completion: [70, 85, 60, 95],
     usage: [30, 42, 38, 50],
     labels: ['W1', 'W2', 'W3', 'W4'],
-    streak: 7, rate: 78, flames: 142,
+    rate: 78,
   },
   Year: {
     completion: [60, 72, 80, 65, 90, 88, 75, 82, 70, 95, 85, 78],
     usage: [20, 30, 35, 40, 45, 50, 48, 52, 38, 60, 55, 50],
     labels: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
-    streak: 7, rate: 84, flames: 142,
+    rate: 84,
   },
 };
 
@@ -70,6 +71,15 @@ export default function AnalyticsScreen({ navigation }) {
 
   const [tab, setTab] = useState('Week');
   const d = DATA[tab];
+
+  // --- DYNAMIC CALCULATIONS ---
+  const routines = state.routines || [];
+  
+  const dynamicCurrentStreak = routines.length > 0 
+    ? Math.max(...routines.map(r => r.currentStreak || 0)) 
+    : 0;
+
+  const dynamicTotalFlames = routines.reduce((total, r) => total + (r.bestStreak || 0), 0);
 
   return (
     <Screen edges={['top']}>
@@ -118,9 +128,9 @@ export default function AnalyticsScreen({ navigation }) {
 
         {/* Stat cards */}
         <View style={styles.statRow}>
-          <StatCard icon="fire" lib="mc" label={t.streak} value={`${d.streak} ${t.daysStr}`} color={c.flame} c={c} />
+          <StatCard icon="fire" lib="mc" label={t.streak} value={`${dynamicCurrentStreak} ${t.daysStr}`} color={c.flame} c={c} />
           <StatCard icon="checkmark-done" label={t.completion} value={`${d.rate}%`} color={c.success} c={c} />
-          <StatCard icon="fire" lib="mc" label={t.flames} value={`${d.flames}`} color={c.primary} c={c} />
+          <StatCard icon="fire" lib="mc" label={t.flames} value={`${dynamicTotalFlames}`} color={c.primary} c={c} />
         </View>
 
         <Text style={[styles.chartTitle, { color: c.text }]}>{t.routineCompTitle}</Text>
@@ -228,7 +238,7 @@ function LineChart({ values, labels, max, color, c }) {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   headerTitle: { fontSize: font.h3, fontWeight: '800' },
-  tabs: { flexDirection: 'row', borderRadius: radius.md, padding: 4, marginBottom: spacing.md }, // Changed bottom margin to fit the warning text
+  tabs: { flexDirection: 'row', borderRadius: radius.md, padding: 4, marginBottom: spacing.md }, 
   tab: { flex: 1, paddingVertical: 8, borderRadius: radius.sm, alignItems: 'center' },
   tabContent: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   tabText: { fontSize: font.body, fontWeight: '700' },

@@ -35,6 +35,21 @@ const translations = {
   }
 };
 
+// Helper function to format time based on user preference
+const formatTime = (timeStr, format) => {
+  if (!timeStr) return '';
+  if (format === '12-hour') {
+    const [hoursStr, minutesStr] = timeStr.split(':');
+    if (!hoursStr || !minutesStr) return timeStr; // Fallback for malformed data
+    
+    let h = parseInt(hoursStr, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12; // Convert 0 to 12, 13 to 1, etc.
+    return `${h}:${minutesStr} ${ampm}`;
+  }
+  return timeStr; // Default is 24-hour format
+};
+
 export default function RoutinesScreen({ navigation }) {
   const { colors: c, state, dispatch } = useApp();
   const today = new Date();
@@ -42,6 +57,20 @@ export default function RoutinesScreen({ navigation }) {
   
   const currentLang = state.prefs?.language === 'Türkçe' ? 'Türkçe' : 'English';
   const t = translations[currentLang];
+  
+  // Get time format preference (default to 24-hour if not set)
+  const timeFormatPref = state.prefs?.timeFormat || '24-hour';
+
+  // --- DYNAMIC CALCULATIONS ---
+  const routines = state.routines || [];
+  
+  // Highest active streak among all routines
+  const dynamicCurrentStreak = routines.length > 0 
+    ? Math.max(...routines.map(r => r.currentStreak || 0)) 
+    : 0;
+
+  // Sum of all best streaks across routines
+  const dynamicTotalFlames = routines.reduce((total, r) => total + (r.bestStreak || 0), 0);
 
   return (
     <Screen edges={['top']}>
@@ -58,14 +87,14 @@ export default function RoutinesScreen({ navigation }) {
             <Text style={[styles.streakLabel, { color: c.textMuted }]}>{t.currentStreak}</Text>
             <View style={styles.streakValue}>
               <MaterialCommunityIcons name="fire" size={26} color={c.flame} />
-              <Text style={[styles.streakNum, { color: c.text }]}>{state.currentStreak} {t.days}</Text>
+              <Text style={[styles.streakNum, { color: c.text }]}>{dynamicCurrentStreak} {t.days}</Text>
             </View>
           </View>
           <View style={[styles.streakDivider, { backgroundColor: c.border }]} />
           <View style={[styles.streakSide, { alignItems: 'flex-end' }]}>
             <Text style={[styles.streakLabel, { color: c.textMuted }]}>{t.total}</Text>
             <View style={styles.streakValue}>
-              <Text style={[styles.streakNum, { color: c.text }]}>{state.totalFlames}</Text>
+              <Text style={[styles.streakNum, { color: c.text }]}>{dynamicTotalFlames}</Text>
               <MaterialCommunityIcons name="fire" size={26} color={c.flame} />
             </View>
           </View>
@@ -75,12 +104,13 @@ export default function RoutinesScreen({ navigation }) {
           {t.today} — {formatShort(today).toUpperCase()}
         </Text>
 
-        {state.routines.map((r) => (
+        {routines.map((r) => (
           <RoutineCard
             key={r.id}
             routine={r}
             c={c}
             t={t}
+            timeFormatPref={timeFormatPref}
             onOpen={() => navigation.navigate('RoutineDetails', { routineId: r.id })}
             onCheck={() => {
               if (r.completedToday) return;
@@ -117,7 +147,9 @@ export default function RoutinesScreen({ navigation }) {
   );
 }
 
-function RoutineCard({ routine: r, c, t, onOpen, onCheck }) {
+function RoutineCard({ routine: r, c, t, timeFormatPref, onOpen, onCheck }) {
+  const displayTime = formatTime(r.time, timeFormatPref);
+
   return (
     <Pressable
       onPress={onOpen}
@@ -137,7 +169,7 @@ function RoutineCard({ routine: r, c, t, onOpen, onCheck }) {
           )}
         </View>
         <Text style={styles.routineMeta}>
-          {r.time} — {r.tasks.length} {t.tasks}
+          {displayTime} — {r.tasks.length} {t.tasks}
         </Text>
         <View style={styles.routineStreak}>
           <MaterialCommunityIcons name="fire" size={14} color="#fff" />
