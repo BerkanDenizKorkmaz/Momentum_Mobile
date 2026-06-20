@@ -97,6 +97,9 @@ export default function CalendarScreen({ navigation }) {
   };
 
   const todoLabel = sameDay(selected, today) ? (currentLang === 'Türkçe' ? 'Bugün' : 'Today') : formatLong(selected);
+  const highestCurrentStreak = state.routines?.length > 0 
+    ? Math.max(...state.routines.map(r => r.currentStreak || 0)) 
+    : 0;
 
   return (
     <Screen edges={['top']}>
@@ -107,7 +110,7 @@ export default function CalendarScreen({ navigation }) {
           <IconButton name="filter-outline" size={22} onPress={() => setFilterOpen(true)} />
           <IconButton name="grid-outline" size={22} onPress={() => setLayoutOpen(true)} />
           <Pressable onPress={() => navigation.navigate('Streaks')} hitSlop={8}>
-            <Flame count={state.currentStreak} size={22} />
+            <Flame count={highestCurrentStreak} size={22} />
           </Pressable>
         </View>
       </View>
