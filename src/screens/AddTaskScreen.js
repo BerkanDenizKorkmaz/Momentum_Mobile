@@ -10,9 +10,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../components/UI';
 import { useApp } from '../state/AppContext';
-import { ROUTINE_COLORS } from '../theme';
-import { WEEKDAYS, MONTHS, toISO } from '../utils/date';
-import { spacing, radius, font } from '../theme';
+import { ROUTINE_COLORS, spacing, radius, font } from '../theme';
+
+// Helper to ensure we always have a valid date string
+const toISO = (date) => date.toISOString().slice(0, 10);
+
+// Fallbacks to prevent crashes if imports are missing
+import { WEEKDAYS as IMPORTED_WEEKDAYS, MONTHS as IMPORTED_MONTHS } from '../utils/date';
+const WEEKDAYS = IMPORTED_WEEKDAYS || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MONTHS = IMPORTED_MONTHS || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const translations = {
   English: {
@@ -45,9 +51,10 @@ const EMOJIS = ['📝', '👥', '🏋️', '📚', '💼', '🛒', '☕', '🎯'
 
 export default function AddTaskScreen({ navigation, route }) {
   const { colors: c, state, dispatch } = useApp();
-  const editing = route.params?.taskId
-    ? state.tasks.find((t) => t.id === route.params.taskId)
-    : null;
+  
+  // Safe param access
+  const taskId = route?.params?.taskId;
+  const editing = taskId ? state.tasks.find((t) => t.id === taskId) : null;
 
   const currentLang = state.prefs?.language === 'Türkçe' ? 'Türkçe' : 'English';
   const t = translations[currentLang];
@@ -55,7 +62,7 @@ export default function AddTaskScreen({ navigation, route }) {
   const [title, setTitle] = useState(editing?.title || '');
   const [emoji, setEmoji] = useState(editing?.emoji || '📝');
   const [desc, setDesc] = useState(editing?.description || '');
-  const [date, setDate] = useState(editing?.date || route.params?.date || toISO(new Date()));
+  const [date, setDate] = useState(editing?.date || route?.params?.date || toISO(new Date()));
   const [time, setTime] = useState(editing?.time || '');
   const [color, setColor] = useState(editing?.color || ROUTINE_COLORS[0]);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -116,6 +123,7 @@ export default function AddTaskScreen({ navigation, route }) {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
+        {/* Title & Emoji */}
         <View style={[styles.titleRow, { backgroundColor: c.inputBg, borderColor: c.border }]}>
           <Pressable
             onPress={() => setEmojiOpen((v) => !v)}
@@ -131,22 +139,20 @@ export default function AddTaskScreen({ navigation, route }) {
             style={[styles.titleInput, { color: c.text }]}
           />
         </View>
-        {emojiOpen && (
+        
+        {emojiOpen ? (
           <View style={styles.emojiPicker}>
             {EMOJIS.map((e) => (
               <Pressable
                 key={e}
-                onPress={() => {
-                  setEmoji(e);
-                  setEmojiOpen(false);
-                }}
+                onPress={() => { setEmoji(e); setEmojiOpen(false); }}
                 style={[styles.emojiOption, { backgroundColor: emoji === e ? c.primarySoft : c.cardAlt }]}
               >
                 <Text style={{ fontSize: 22 }}>{e}</Text>
               </Pressable>
             ))}
           </View>
-        )}
+        ) : null}
 
         <Field label={t.taskDesc} c={c}>
           <TextInput
@@ -202,7 +208,7 @@ export default function AddTaskScreen({ navigation, route }) {
           {ROUTINE_COLORS.map((col) => (
             <Pressable key={col} onPress={() => setColor(col)} style={styles.colorWrap}>
               <View style={[styles.colorSwatch, { backgroundColor: col }]}>
-                {color === col && <Ionicons name="checkmark" size={18} color="#fff" />}
+                {color === col ? <Ionicons name="checkmark" size={18} color="#fff" /> : null}
               </View>
             </Pressable>
           ))}
@@ -217,7 +223,7 @@ function Field({ label, icon, children, c }) {
     <View style={{ marginBottom: spacing.lg }}>
       <Text style={[styles.label, { color: c.textMuted }]}>{label}</Text>
       <View style={[styles.field, { backgroundColor: c.inputBg, borderColor: c.border }]}>
-        {icon && <Ionicons name={icon} size={20} color={c.textMuted} />}
+        {icon ? <Ionicons name={icon} size={20} color={c.textMuted} style={{ marginRight: 8 }} /> : null}
         {children}
       </View>
     </View>
@@ -242,6 +248,5 @@ const styles = StyleSheet.create({
   dayChipNum: { fontSize: font.h3, fontWeight: '800', marginVertical: 2 },
   dayChipMon: { fontSize: font.tiny, fontWeight: '600' },
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.xs },
-  colorWrap: {},
   colorSwatch: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

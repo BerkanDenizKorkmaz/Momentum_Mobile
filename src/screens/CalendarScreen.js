@@ -1,13 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Modal, TextInput } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Modal,
+  TextInput,
+} from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Screen, IconButton, Flame, openDrawer } from '../components/UI';
 import { useApp } from '../state/AppContext';
-// Removed WEEKDAYS and MONTHS from import, kept the utility functions
-import { getMonthMatrix, getWeekDates, toISO, sameDay, formatLong } from '../utils/date';
+import { getMonthMatrix, getWeekDates, toISO, sameDay } from '../utils/date';
 import { spacing, radius, font } from '../theme';
 
-// Define localized date strings
+// Localized date arrays
 const LOCALIZED_DATES = {
   English: {
     WEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -30,7 +37,8 @@ const translations = {
     filters: { All: 'All', Active: 'Active', Done: 'Done' },
     scheduled: 'scheduled',
     taskStr: 'task',
-    tasksStr: 'tasks'
+    tasksStr: 'tasks',
+    today: 'Today'
   },
   Türkçe: {
     searchPlaceholder: 'Görev ara...',
@@ -42,19 +50,26 @@ const translations = {
     filters: { All: 'Tümü', Active: 'Aktif', Done: 'Tamamlanan' },
     scheduled: 'planlandı',
     taskStr: 'görev',
-    tasksStr: 'görev'
+    tasksStr: 'görev',
+    today: 'Bugün'
   }
 };
 
 const LAYOUTS_KEYS = ['Year', 'Month', 'Week', 'Day'];
 const FILTER_KEYS = ['All', 'Active', 'Done'];
 
+// Helper for localizing the ToDo date header
+const getLocalizedDateLabel = (date, months, days) => {
+  const dayName = days[date.getDay()];
+  const monthName = months[date.getMonth()];
+  return `${dayName}, ${date.getDate()} ${monthName}`;
+};
+
 export default function CalendarScreen({ navigation }) {
   const { colors: c, state, dispatch } = useApp();
   const currentLang = state.prefs?.language === 'Türkçe' ? 'Türkçe' : 'English';
   const t = translations[currentLang];
   
-  // Get the localized date arrays
   const localDays = LOCALIZED_DATES[currentLang].WEEKDAYS;
   const localMonths = LOCALIZED_DATES[currentLang].MONTHS;
 
@@ -96,7 +111,8 @@ export default function CalendarScreen({ navigation }) {
     setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
   };
 
-  const todoLabel = sameDay(selected, today) ? (currentLang === 'Türkçe' ? 'Bugün' : 'Today') : formatLong(selected);
+  const todoLabel = sameDay(selected, today) ? t.today : getLocalizedDateLabel(selected, localMonths, localDays);
+  
   const highestCurrentStreak = state.routines?.length > 0 
     ? Math.max(...state.routines.map(r => r.currentStreak || 0)) 
     : 0;
@@ -117,7 +133,6 @@ export default function CalendarScreen({ navigation }) {
 
       <View style={styles.monthRow}>
         <Pressable onPress={() => shiftMonth(-1)} hitSlop={10}><Ionicons name="chevron-back" size={22} color={c.textMuted} /></Pressable>
-        {/* Pass localized month array here */}
         <Text style={[styles.monthTitle, { color: c.text }]}>{localMonths[cursor.getMonth()]} {cursor.getFullYear()}</Text>
         <Pressable onPress={() => shiftMonth(1)} hitSlop={10}><Ionicons name="chevron-forward" size={22} color={c.textMuted} /></Pressable>
       </View>
@@ -135,7 +150,7 @@ export default function CalendarScreen({ navigation }) {
           layout={layout} cursor={cursor} selected={selected} today={today} tasksByDay={tasksByDay}
           onSelect={(d) => { setSelected(d); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); }}
           onPickMonth={(m) => { setCursor(new Date(cursor.getFullYear(), m, 1)); dispatch({ type: 'SET_LAYOUT', layout: 'Month' }); }}
-          c={c} t={t} localDays={localDays} localMonths={localMonths} // Pass localized data down
+          c={c} t={t} localDays={localDays} localMonths={localMonths}
         />
 
         <View style={styles.todoHeader}>
@@ -190,7 +205,6 @@ export default function CalendarScreen({ navigation }) {
   );
 }
 
-// Added localDays and localMonths to props
 function CalendarView({ layout, cursor, selected, today, tasksByDay, onSelect, onPickMonth, c, t, localDays, localMonths }) {
   if (layout === 'Year') {
     return (
@@ -217,10 +231,6 @@ function CalendarView({ layout, cursor, selected, today, tasksByDay, onSelect, o
   }
 
   const weeks = layout === 'Week' ? [getWeekDates(selected)] : getMonthMatrix(cursor.getFullYear(), cursor.getMonth());
-
-  // Reorder days if your matrix starts on Monday. 
-  // If getMonthMatrix uses Monday=0, we need to map the headers appropriately.
-  // Assuming Monday is the first day of the week in your UI layout:
   const headerDays = [localDays[1], localDays[2], localDays[3], localDays[4], localDays[5], localDays[6], localDays[0]];
 
   return (
