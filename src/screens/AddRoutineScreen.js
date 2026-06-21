@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Switch } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Switch, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../components/UI';
 import { useApp } from '../state/AppContext';
 import { ROUTINE_COLORS, spacing, radius, font } from '../theme';
-import { WEEKDAYS } from '../utils/date';
-import { useSubscription } from '../state/AppContext'; 
+
+// Safely import WEEKDAYS, but provide a fallback just in case it's missing in your utils/date file
+import { WEEKDAYS as IMPORTED_WEEKDAYS } from '../utils/date';
+const WEEKDAYS = IMPORTED_WEEKDAYS || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const FREE_ROUTINE_LIMIT = 3;
 
 const translations = {
   English: {
@@ -27,7 +31,9 @@ const translations = {
     color: 'Color',
     wakeUp: 'Wake Up',
     limitMessage: 'Plan limit reached. Upgrade to add more.',
-    buyPremium: 'Buy Premium'
+    buyPremium: 'Buy Premium',
+    error: 'Error',
+    emptyTitle: 'Please enter a title for your routine.'
   },
   Türkçe: {
     editRoutine: 'Rutini Düzenle',
@@ -48,20 +54,27 @@ const translations = {
     color: 'Renk',
     wakeUp: 'Uyan',
     limitMessage: 'Plan sınırına ulaşıldı. Daha fazlası için yükseltin.',
-    buyPremium: 'Premium Al'
+    buyPremium: 'Premium Al',
+    error: 'Hata',
+    emptyTitle: 'Lütfen rutininiz için bir başlık girin.'
   }
 };
 
 const EMOJIS = ['🌅', '💪', '🌙', '🧘', '📖', '🏃', '🥗', '🎯', '💧', '🛏️'];
 
-export default function AddRoutineScreen({ navigation, route }) {
+// Added default empty object for route to prevent crashes if it is missing
+export default function AddRoutineScreen({ navigation, route = {} }) {
   const { colors: c, state, dispatch } = useApp();
-  const { canAddRoutine } = useSubscription();
-  const currentLang = state.prefs?.language === 'Türkçe' ? 'Türkçe' : 'English';
+  
+  // Safe state checks
+  const prefs = state?.prefs || {};
+  const currentLang = prefs.language === 'Türkçe' ? 'Türkçe' : 'English';
   const t = translations[currentLang];
 
-  const editing = route.params?.routineId ? state.routines.find((r) => r.id === route.params.routineId) : null;
-  const hasMorningRoutine = state.routines.some((r) => r.isMorningRoutine && r.id !== editing?.id);
+  const routinesList = state?.routines || [];
+  const editingId = route?.params?.routineId;
+  const editing = editingId ? routinesList.find((r) => r.id === editingId) : null;
+  const hasMorningRoutine = routinesList.some((r) => r.isMorningRoutine && r.id !== editing?.id);
 
   const [title, setTitle] = useState(editing?.title || '');
   const [emoji, setEmoji] = useState(editing?.emoji || '🌅');
@@ -70,33 +83,41 @@ export default function AddRoutineScreen({ navigation, route }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [isMorningRoutine, setIsMorningRoutine] = useState(Boolean(editing?.isMorningRoutine));
   
-  // Gizli metin uyarısı için state
   const [showPremiumWarning, setShowPremiumWarning] = useState(false);
   
   const [days, setDays] = useState(() => {
     if (!editing) return [];
     if (editing.days === 'Every day' || editing.days === 'Her gün') return [...WEEKDAYS];
-    return editing.days.split(',').map((d) => d.trim());
+    if (typeof editing.days === 'string') return editing.days.split(',').map((d) => d.trim());
+    return [];
   });
 
+  // Safe Plan Limit Check
+  const currentPlan = prefs.plan || 'starter';
+  const isStarter = currentPlan === 'starter';
+  const limitReached = isStarter && routinesList.length >= FREE_ROUTINE_LIMIT;
+
   const toggleDay = (d) => setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]));
-  const daysLabel = days.length === 7 ? t.everyDay : days.length ? days.join(', ') : t.selectDays;
+  const daysLabel = days.length === WEEKDAYS.length ? t.everyDay : days.length ? days.join(', ') : t.selectDays;
 
   const onSave = () => {
-    if (!title.trim()) { navigation.goBack(); return; }
+    if (!title.trim()) { 
+      Alert.alert(t.error, t.emptyTitle);
+      return; 
+    }
     
-    // Abonelik Limit Kontrolü - Alert yerine gizli metni gösterir
-    if (!editing) {
-      if (!canAddRoutine(state.routines.length)) {
-        setShowPremiumWarning(true);
-        // İsteğe bağlı: Uyarıyı 5 saniye sonra ekrandan silmek istersen
-        setTimeout(() => setShowPremiumWarning(false), 5000);
-        return;
-      }
+    // Limit check triggers warning instead of crash
+    if (!editing && limitReached) {
+      setShowPremiumWarning(true);
+      setTimeout(() => setShowPremiumWarning(false), 5000);
+      return;
     }
     
     const patch = {
-      title, emoji, time: time || '08:00', color,
+      title, 
+      emoji, 
+      time: time || '08:00', 
+      color,
       days: (daysLabel === 'Select days' || daysLabel === 'Gün seç') ? t.everyDay : daysLabel,
       isMorningRoutine: editing ? Boolean(editing.isMorningRoutine) : isMorningRoutine,
     };
@@ -108,7 +129,11 @@ export default function AddRoutineScreen({ navigation, route }) {
       dispatch({
         type: 'ADD_ROUTINE',
         routine: {
-          id: 'r' + now, ...patch, currentStreak: 0, bestStreak: 0, completedToday: false,
+          id: 'r' + now, 
+          ...patch, 
+          currentStreak: 0, 
+          bestStreak: 0, 
+          completedToday: false,
           tasks: isMorningRoutine ? [{ id: `rt${now}-wake`, title: t.wakeUp, duration: '15 min', done: false }] : [],
         },
       });
@@ -121,7 +146,7 @@ export default function AddRoutineScreen({ navigation, route }) {
       {/* Header */}
       <View style={styles.top}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="close" size={28} color={c.text} />
+          <Ionicons name="close" size={28} color={c.text || '#000'} />
         </Pressable>
         <Text style={[styles.topTitle, { color: c.text }]}>{editing ? t.editRoutine : t.addRoutine}</Text>
         <Pressable onPress={onSave} style={[styles.saveBtn, { backgroundColor: c.primary }]}>
@@ -129,10 +154,10 @@ export default function AddRoutineScreen({ navigation, route }) {
         </Pressable>
       </View>
 
-      {/* Kaydet butonuna basıldığında limit aşıldıysa beliren gizli metin */}
-      {showPremiumWarning && (
+      {/* Warning Banner - using ternary instead of && to prevent random strict RN string errors */}
+      {showPremiumWarning ? (
         <Pressable 
-          style={[styles.warningBanner, { backgroundColor: c.flame + '1A', borderColor: c.flame }]}
+          style={[styles.warningBanner, { backgroundColor: (c.flame || '#ff4500') + '1A', borderColor: c.flame }]}
           onPress={() => navigation.navigate('Premium')}
         >
           <Text style={[styles.warningText, { color: c.flame }]}>
@@ -140,7 +165,7 @@ export default function AddRoutineScreen({ navigation, route }) {
             <Text style={{ fontWeight: '800', textDecorationLine: 'underline' }}>{t.buyPremium}</Text>
           </Text>
         </Pressable>
-      )}
+      ) : null}
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
         {/* Title & Emoji */}
@@ -148,18 +173,29 @@ export default function AddRoutineScreen({ navigation, route }) {
           <Pressable onPress={() => setEmojiOpen((v) => !v)} style={[styles.emojiBtn, { borderColor: c.border }]}>
             <Text style={{ fontSize: 22 }}>{emoji}</Text>
           </Pressable>
-          <TextInput placeholder={t.addTitle} placeholderTextColor={c.textFaint} value={title} onChangeText={setTitle} style={[styles.titleInput, { color: c.text }]} />
+          <TextInput 
+            placeholder={t.addTitle} 
+            placeholderTextColor={c.textFaint} 
+            value={title} 
+            onChangeText={setTitle} 
+            style={[styles.titleInput, { color: c.text }]} 
+          />
         </View>
         
-        {emojiOpen && (
+        {/* Emoji Picker */}
+        {emojiOpen ? (
           <View style={styles.emojiPicker}>
             {EMOJIS.map((e) => (
-              <Pressable key={e} onPress={() => { setEmoji(e); setEmojiOpen(false); }} style={[styles.emojiOption, { backgroundColor: emoji === e ? c.primarySoft : c.cardAlt }]}>
+              <Pressable 
+                key={e} 
+                onPress={() => { setEmoji(e); setEmojiOpen(false); }} 
+                style={[styles.emojiOption, { backgroundColor: emoji === e ? c.primarySoft : c.cardAlt }]}
+              >
                 <Text style={{ fontSize: 22 }}>{e}</Text>
               </Pressable>
             ))}
           </View>
-        )}
+        ) : null}
 
         {/* Days Selection */}
         <Text style={[styles.label, { color: c.textMuted }]}>{t.routineDays}</Text>
@@ -167,8 +203,14 @@ export default function AddRoutineScreen({ navigation, route }) {
           {WEEKDAYS.map((d) => {
             const active = days.includes(d);
             return (
-              <Pressable key={d} onPress={() => toggleDay(d)} style={[styles.dayDot, { backgroundColor: active ? c.primary : c.cardAlt, borderColor: active ? c.primary : c.border }]}>
-                <Text style={[styles.dayDotText, { color: active ? '#fff' : c.textMuted }]}>{d[0]}</Text>
+              <Pressable 
+                key={d} 
+                onPress={() => toggleDay(d)} 
+                style={[styles.dayDot, { backgroundColor: active ? c.primary : c.cardAlt, borderColor: active ? c.primary : c.border }]}
+              >
+                <Text style={[styles.dayDotText, { color: active ? '#fff' : c.textMuted }]}>
+                  {d ? d[0] : ''}
+                </Text>
               </Pressable>
             );
           })}
@@ -176,12 +218,11 @@ export default function AddRoutineScreen({ navigation, route }) {
         <Text style={[styles.daysLabel, { color: c.text }]}>{daysLabel}</Text>
 
         {/* Morning Routine Toggle */}
-        {!editing && (
+        {!editing ? (
           <>
             <Text style={[styles.label, { color: c.textMuted }]}>{t.morningRoutine}</Text>
             <Pressable
               onPress={() => {
-                // Not: Burada da istersen alert yerine custom bir uyarı ekleyebilirsin
                 if (hasMorningRoutine) return;
                 setIsMorningRoutine((v) => !v);
               }}
@@ -197,17 +238,25 @@ export default function AddRoutineScreen({ navigation, route }) {
                   if (hasMorningRoutine) return;
                   setIsMorningRoutine(value);
                 }}
-                disabled={hasMorningRoutine} trackColor={{ false: c.border, true: c.primarySoft }} thumbColor={isMorningRoutine ? c.primary : '#f4f4f4'}
+                disabled={hasMorningRoutine} 
+                trackColor={{ false: c.border, true: c.primarySoft }} 
+                thumbColor={isMorningRoutine ? c.primary : '#f4f4f4'}
               />
             </Pressable>
           </>
-        )}
+        ) : null}
 
         {/* Time & Color */}
         <Text style={[styles.label, { color: c.textMuted }]}>{t.time}</Text>
         <View style={[styles.field, { backgroundColor: c.inputBg, borderColor: c.border }]}>
           <Ionicons name="time-outline" size={20} color={c.textMuted} />
-          <TextInput placeholder={t.timeHint} placeholderTextColor={c.textFaint} value={time} onChangeText={setTime} style={[styles.fieldInput, { color: c.text }]} />
+          <TextInput 
+            placeholder={t.timeHint} 
+            placeholderTextColor={c.textFaint} 
+            value={time} 
+            onChangeText={setTime} 
+            style={[styles.fieldInput, { color: c.text }]} 
+          />
         </View>
 
         <Text style={[styles.label, { color: c.textMuted }]}>{t.color}</Text>
@@ -215,7 +264,7 @@ export default function AddRoutineScreen({ navigation, route }) {
           {ROUTINE_COLORS.map((col) => (
             <Pressable key={col} onPress={() => setColor(col)}>
               <View style={[styles.colorSwatch, { backgroundColor: col }]}>
-                {color === col && <Ionicons name="checkmark" size={18} color="#fff" />}
+                {color === col ? <Ionicons name="checkmark" size={18} color="#fff" /> : null}
               </View>
             </Pressable>
           ))}
@@ -230,23 +279,8 @@ const styles = StyleSheet.create({
   topTitle: { fontSize: font.h3, fontWeight: '800' },
   saveBtn: { paddingHorizontal: spacing.lg, paddingVertical: 8, borderRadius: radius.pill },
   saveText: { color: '#fff', fontWeight: '700', fontSize: font.body },
-  
-  // Uyarı Kutusu Stilleri
-  warningBanner: { 
-    marginHorizontal: spacing.lg, 
-    paddingVertical: spacing.sm, 
-    paddingHorizontal: spacing.md, 
-    borderRadius: radius.md, 
-    borderWidth: 1, 
-    marginBottom: spacing.xs,
-    alignItems: 'center' 
-  },
-  warningText: { 
-    fontSize: font.small, 
-    fontWeight: '600', 
-    textAlign: 'center' 
-  },
-
+  warningBanner: { marginHorizontal: spacing.lg, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, marginBottom: spacing.xs, alignItems: 'center' },
+  warningText: { fontSize: font.small, fontWeight: '600', textAlign: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.md, padding: spacing.sm },
   emojiBtn: { width: 44, height: 44, borderRadius: radius.sm, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   titleInput: { flex: 1, fontSize: font.title, fontWeight: '600' },
